@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Control de Entrega de EPP</title>
+
+<!-- Tailwind CSS (CDN) y SheetJS para exportar a Excel -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style type="text/tailwindcss">
+  .card { @apply bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5; }
+  .lbl  { @apply block text-sm font-semibold text-slate-700 mb-1; }
+  .inp  { @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base text-slate-800
+                 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400; }
+  .btn  { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold
+                 transition active:scale-[.98] disabled:opacity-50 disabled:pointer-events-none; }
+  .btn-pri { @apply bg-amber-400 text-slate-900 hover:bg-amber-300; }
+  .btn-dark{ @apply bg-slate-900 text-white hover:bg-slate-700; }
+  .btn-sec { @apply bg-white border border-slate-300 text-slate-700 hover:bg-slate-50; }
+  .btn-red { @apply bg-red-600 text-white hover:bg-red-500; }
+  .step { @apply w-7 h-7 rounded-full bg-slate-900 text-amber-400 text-sm font-bold grid place-items-center shrink-0; }
+  .tab  { @apply px-3 sm:px-4 py-3 text-sm font-semibold border-b-4 border-transparent text-slate-400 whitespace-nowrap; }
+  .tab.active { @apply border-amber-400 text-white; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-0.5; }
+  .badge-ok  { @apply text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium; }
+  .badge-warn{ @apply text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium; }
+  .badge-bad { @apply text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium; }
+  .qbtn { @apply w-11 h-11 rounded-xl bg-slate-100 text-xl font-bold text-slate-700 active:bg-slate-200; }
+</style>
+<style>
+  html { -webkit-tap-highlight-color: transparent; }
+  #sigCanvas { touch-action: none; width: 100%; height: 220px; display: block; cursor: crosshair; }
+  @media (min-width: 640px) { #sigCanvas { height: 260px; } }
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  .sig-line { position:absolute; left:8%; right:8%; bottom:48px; border-bottom:2px dashed #cbd5e1; pointer-events:none; }
+</style>
+</head>
+
+<body class="bg-slate-100 text-slate-800 min-h-screen pb-24">
+
+<!-- ===================== ENCABEZADO ===================== -->
+<header class="bg-slate-900 text-white sticky top-0 z-30 shadow-lg">
+  <div class="max-w-5xl mx-auto px-4 pt-3 pb-1 flex items-center gap-3">
+    <div class="w-11 h-11 rounded-xl bg-amber-400 text-slate-900 font-black grid place-items-center text-sm tracking-tight">EPP</div>
+    <div class="flex-1 min-w-0">
+      <h1 class="font-bold leading-tight truncate">Control de Entrega de EPP</h1>
+      <p class="text-xs text-slate-400 truncate" id="hdrSub">Registro en faena</p>
+    </div>
+    <span id="netBadge" class="hidden sm:inline-flex text-xs px-2 py-1 rounded-full font-medium"></span>
+    <button id="btnSync" class="relative w-11 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 grid place-items-center" title="Sincronizar con la nube" aria-label="Sincronizar">
+      <svg id="syncIcon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v6h6M20 20v-6h-6M5.6 15A7 7 0 0 0 18.4 17M18.4 9A7 7 0 0 0 5.6 7"/></svg>
+      <span id="pendBadge" class="hidden absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-[11px] font-bold grid place-items-center"></span>
+    </button>
+    <button id="btnConfig" class="w-11 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 grid place-items-center" title="Configuración" aria-label="Configuración">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.3 4.3c.4-1.8 3-1.8 3.4 0a1.7 1.7 0 0 0 2.6 1.1c1.5-.9 3.3.8 2.4 2.4a1.7 1.7 0 0 0 1 2.5c1.8.5 1.8 3 0 3.5a1.7 1.7 0 0 0-1 2.5c.9 1.6-.9 3.4-2.4 2.4a1.7 1.7 0 0 0-2.6 1.1c-.4 1.8-3 1.8-3.4 0a1.7 1.7 0 0 0-2.6-1.1c-1.5.9-3.3-.8-2.4-2.4a1.7 1.7 0 0 0-1-2.5c-1.8-.5-1.8-3 0-3.5a1.7 1.7 0 0 0 1-2.5c-.9-1.6.9-3.4 2.4-2.4a1.7 1.7 0 0 0 2.6-1.1z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+  </div>
+  <nav class="max-w-5xl mx-auto px-2 flex gap-1 overflow-x-auto">
+    <button class="tab active" data-tab="registro">Registrar entrega</button>
+    <button class="tab" data-tab="historial">Historial y panel</button>
+  </nav>
+</header>
+
+<main class="max-w-5xl mx-auto px-3 sm:px-4 py-4">
+
+<!-- ===================== PESTAÑA: REGISTRO ===================== -->
+<section id="tab-registro">
+<form id="formEntrega" class="space-y-4" novalidate autocomplete="off">
+
+  <!-- 1. Fecha / responsable -->
+  <div class="card">
+    <div class="flex items-center gap-2 mb-3"><span class="step">1</span><h2 class="font-bold text-lg">Fecha y responsable</h2></div>
+    <div class="grid sm:grid-cols-2 gap-3">
+      <div>
+        <label class="lbl" for="fFechaHora">Fecha y hora de entrega</label>
+        <div class="flex gap-2">
+          <input id="fFechaHora" type="datetime-local" class="inp" required>
+          <button type="button" id="btnAhora" class="btn btn-sec shrink-0">Ahora</button>
+        </div>
+      </div>
+      <div>
+        <label class="lbl" for="fResponsable">Entregado por (responsable / bodega / prevención)</label>
+        <input id="fResponsable" class="inp" placeholder="Nombre de quien entrega">
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Trabajador -->
+  <div class="card">
+    <div class="flex items-center gap-2 mb-3"><span class="step">2</span><h2 class="font-bold text-lg">Datos del trabajador</h2></div>
+    <div class="grid sm:grid-cols-2 gap-3">
+      <div>
+        <label class="lbl" for="fRut">RUT / DNI <span class="text-red-500">*</span></label>
+        <input id="fRut" class="inp uppercase" inputmode="text" placeholder="12.345.678-9" required>
+        <div class="flex items-center justify-between mt-1 gap-2">
+          <p id="rutHint" class="text-xs text-slate-500">Se completa automáticamente si el trabajador ya está registrado.</p>
+          <label class="text-xs text-slate-600 flex items-center gap-1 shrink-0"><input id="fExtranjero" type="checkbox" class="w-4 h-4 accent-amber-500"> DNI / pasaporte</label>
+        </div>
+      </div>
+      <div>
+        <label class="lbl" for="fNombre">Nombre completo <span class="text-red-500">*</span></label>
+        <input id="fNombre" class="inp" placeholder="Nombre y apellidos" required autocapitalize="words">
+      </div>
+      <div>
+        <label class="lbl" for="fCargo">Cargo</label>
+        <input id="fCargo" class="inp" list="dlCargos" placeholder="Ej.: Operador, Maestro, Ayudante">
+      </div>
+      <div>
+        <label class="lbl" for="fArea">Área / Departamento</label>
+        <input id="fArea" class="inp" list="dlAreas" placeholder="Ej.: Mantención, Producción">
+      </div>
+      <div>
+        <label class="lbl" for="fFaena">Faena / Obra</label>
+        <input id="fFaena" class="inp" list="dlFaenas" placeholder="Ej.: Proyecto Norte">
+      </div>
+      <div>
+        <label class="lbl" for="fTurno">Turno</label>
+        <input id="fTurno" class="inp" list="dlTurnos" placeholder="Ej.: Día, Noche, 7x7">
+      </div>
+    </div>
+    <div id="trabajadorInfo" class="hidden mt-3 rounded-xl bg-sky-50 border border-sky-200 p-3 text-sm"></div>
+    <datalist id="dlCargos"></datalist><datalist id="dlAreas"></datalist><datalist id="dlFaenas"></datalist>
+    <datalist id="dlTurnos"><option value="Día"><option value="Noche"><option value="Turno A"><option value="Turno B"><option value="Turno C"><option value="4x4"><option value="7x7"><option value="10x10"><option value="14x14"></datalist>
+  </div>
+
+  <!-- 3. EPP -->
+  <div class="card">
+    <div class="flex items-center gap-2 mb-3"><span class="step">3</span><h2 class="font-bold text-lg flex-1">EPP entregados</h2><span id="eppCount" class="badge-warn">0 seleccionados</span></div>
+    <div class="grid sm:grid-cols-2 gap-3 mb-3">
+      <div>
+        <label class="lbl" for="motivoGeneral">Motivo por defecto (se aplica al marcar un EPP)</label>
+        <select id="motivoGeneral" class="inp"></select>
+      </div>
+      <div>
+        <label class="lbl" for="eppBuscar">Buscar EPP</label>
+        <input id="eppBuscar" class="inp" type="search" placeholder="Filtrar la lista…">
+      </div>
+    </div>
+    <div id="eppList" class="space-y-2"></div>
+    <div class="mt-3 flex gap-2">
+      <input id="otroNombre" class="inp" placeholder="¿Otro EPP? Escriba el nombre…">
+      <button type="button" id="btnOtroEpp" class="btn btn-dark shrink-0">+ Agregar</button>
+    </div>
+  </div>
+
+  <!-- 4. Observaciones -->
+  <div class="card">
+    <div class="flex items-center gap-2 mb-3"><span class="step">4</span><h2 class="font-bold text-lg">Observaciones</h2></div>
+    <textarea id="fObs" rows="3" class="inp" placeholder="Comentarios adicionales: estado del EPP devuelto, n° de serie del arnés, justificación, etc."></textarea>
+  </div>
+
+  <!-- 5. Firma -->
+  <div class="card">
+    <div class="flex items-center gap-2 mb-2"><span class="step">5</span><h2 class="font-bold text-lg flex-1">Firma de recepción conforme</h2>
+      <button type="button" id="btnLimpiarFirma" class="btn btn-sec !py-2 text-sm">Borrar firma</button></div>
+    <p class="text-sm text-slate-600 mb-3">Declaro haber recibido de forma gratuita los elementos de protección personal detallados, en buen estado, y me comprometo a usarlos correctamente, cuidarlos y solicitar su reposición cuando corresponda.</p>
+    <div class="relative rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 overflow-hidden">
+      <canvas id="sigCanvas" aria-label="Área de firma"></canvas>
+      <div class="sig-line"></div>
+      <div id="sigPlaceholder" class="absolute inset-0 grid place-items-center text-slate-400 pointer-events-none select-none">
+        <span class="text-center"><span class="text-2xl">✍️</span><br>Firme aquí con el dedo o lápiz</span>
+      </div>
+    </div>
+    <p id="sigNombre" class="text-center text-sm text-slate-500 mt-2"></p>
+  </div>
+
+  <div class="flex flex-col-reverse sm:flex-row gap-3 sticky bottom-3 z-20">
+    <button type="button" id="btnReset" class="btn btn-sec sm:w-48 shadow">Limpiar formulario</button>
+    <button type="submit" id="btnGuardar" class="btn btn-pri flex-1 text-lg shadow-lg">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+      Guardar entrega
+    </button>
+  </div>
+</form>
+</section>
+
+<!-- ===================== PESTAÑA: HISTORIAL ===================== -->
+<section id="tab-historial" class="hidden space-y-4">
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card !p-4"><p class="text-xs font-semibold text-slate-500 uppercase">Entregas hoy</p><p id="kpiHoy" class="text-3xl font-black mt-1">0</p><p id="kpiHoySub" class="text-xs text-slate-500">0 trabajadores</p></div>
+    <div class="card !p-4"><p class="text-xs font-semibold text-slate-500 uppercase">Unidades hoy</p><p id="kpiUnid" class="text-3xl font-black mt-1">0</p><p class="text-xs text-slate-500">EPP entregados</p></div>
+    <div class="card !p-4"><p class="text-xs font-semibold text-slate-500 uppercase">EPP más entregado</p><p id="kpiTop" class="text-lg font-black mt-1 leading-tight">—</p><p id="kpiTopSub" class="text-xs text-slate-500">según filtros</p></div>
+    <div class="card !p-4"><p class="text-xs font-semibold text-slate-500 uppercase">Por sincronizar</p><p id="kpiPend" class="text-3xl font-black mt-1">0</p><p id="kpiPendSub" class="text-xs text-slate-500">nube no configurada</p></div>
+  </div>
+
+  <div class="card">
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div><label class="lbl" for="filQ">RUT o nombre</label><input id="filQ" class="inp" type="search" placeholder="Buscar…"></div>
+      <div><label class="lbl" for="filDesde">Desde</label><input id="filDesde" class="inp" type="date"></div>
+      <div><label class="lbl" for="filHasta">Hasta</label><input id="filHasta" class="inp" type="date"></div>
+      <div><label class="lbl" for="filTipo">Tipo de EPP</label><select id="filTipo" class="inp"><option value="">Todos</option></select></div>
+    </div>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button id="btnFilHoy" class="btn btn-sec !py-2 text-sm">Hoy</button>
+      <button id="btnFil7" class="btn btn-sec !py-2 text-sm">Últimos 7 días</button>
+      <button id="btnFilMes" class="btn btn-sec !py-2 text-sm">Este mes</button>
+      <button id="btnFilLimpiar" class="btn btn-sec !py-2 text-sm">Quitar filtros</button>
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-3 gap-4">
+    <div class="card lg:col-span-1">
+      <h3 class="font-bold mb-3">EPP más entregados <span class="text-xs font-normal text-slate-500">(unidades, según filtros)</span></h3>
+      <div id="chartTop" class="space-y-3 text-sm"></div>
+    </div>
+    <div class="card lg:col-span-2">
+      <h3 class="font-bold mb-3">Exportar a Excel</h3>
+      <div class="grid sm:grid-cols-2 gap-2">
+        <button id="btnXlsxTodo" class="btn btn-dark">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0l-5-5m5 5l5-5M4 20h16"/></svg>
+          Base completa (.xlsx)</button>
+        <button id="btnXlsxFiltro" class="btn btn-sec">Solo resultados filtrados</button>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">Se genera una fila por cada EPP entregado, más una hoja de resumen. Funciona sin conexión.</p>
+    </div>
+  </div>
+
+  <div>
+    <div class="flex items-center justify-between mb-2 px-1">
+      <h3 class="font-bold">Entregas registradas</h3>
+      <span id="listaInfo" class="text-sm text-slate-500"></span>
+    </div>
+    <div id="lista" class="space-y-2"></div>
+  </div>
+</section>
+</main>
+
+<!-- ===================== MODAL DETALLE ===================== -->
+<div id="modalDetalle" class="modal hidden fixed inset-0 z-50 bg-slate-900/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <div class="bg-white w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl shadow-2xl">
+    <div class="sticky top-0 bg-white border-b px-5 py-4 flex items-center gap-3">
+      <h3 class="font-bold text-lg flex-1">Detalle de entrega</h3>
+      <button class="cerrar w-10 h-10 rounded-xl bg-slate-100 text-xl" aria-label="Cerrar">✕</button>
+    </div>
+    <div id="detalleBody" class="p-5"></div>
+  </div>
+</div>
+
+<!-- ===================== MODAL CONFIGURACIÓN ===================== -->
+<div id="modalConfig" class="modal hidden fixed inset-0 z-50 bg-slate-900/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <div class="bg-white w-full sm:max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl shadow-2xl">
+    <div class="sticky top-0 bg-white border-b px-5 py-4 flex items-center gap-3">
+      <h3 class="font-bold text-lg flex-1">Configuración</h3>
+      <button class="cerrar w-10 h-10 rounded-xl bg-slate-100 text-xl" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="p-5 space-y-5">
+      <div class="space-y-3">
+        <h4 class="font-bold">Sincronización con la nube (Google Sheets)</h4>
+        <div><label class="lbl" for="cfgUrl">URL de la aplicación web (termina en /exec)</label>
+          <input id="cfgUrl" class="inp text-sm" placeholder="https://script.google.com/macros/s/…/exec"></div>
+        <div><label class="lbl" for="cfgToken">Token de seguridad (el mismo del script)</label>
+          <input id="cfgToken" class="inp" placeholder="Clave compartida"></div>
+        <label class="flex items-center gap-2 text-sm"><input id="cfgAuto" type="checkbox" class="w-5 h-5 accent-amber-500"> Enviar automáticamente cada registro cuando haya señal</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="btnProbar" class="btn btn-sec">Probar conexión</button>
+          <button id="btnGuardarCfg" class="btn btn-pri">Guardar</button>
+        </div>
+        <p id="cfgEstado" class="text-sm"></p>
+      </div>
+      <hr>
+      <div class="space-y-3">
+        <h4 class="font-bold">Respaldo de datos del dispositivo</h4>
+        <p class="text-sm text-slate-600">Los registros se guardan en este dispositivo (IndexedDB). El respaldo JSON incluye las firmas y permite traspasarlos a otro equipo.</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="btnBackup" class="btn btn-sec">Descargar respaldo</button>
+          <label class="btn btn-sec cursor-pointer">Importar respaldo<input id="inpImport" type="file" accept=".json,application/json" class="hidden"></label>
+        </div>
+        <button id="btnBorrarTodo" class="btn btn-red w-full">Borrar todos los registros del dispositivo</button>
+      </div>
+      <p id="cfgInfo" class="text-xs text-slate-400"></p>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-6 z-[60] hidden max-w-[92vw] px-4 py-3 rounded-xl shadow-xl text-sm font-medium"></div>
+
+<script>
+/* =========================================================================
+   CONTROL DE ENTREGA DE EPP — SPA offline-first
+   Módulos: Utilidades · Almacenamiento (IndexedDB) · Catálogo EPP · Firma
+            Formulario · Historial/Dashboard · Exportación Excel · Sync nube
+   ========================================================================= */
+'use strict';
+
+/* ---------------------------- Utilidades ---------------------------- */
+const $  = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const localISO = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const hoyISO = () => localISO().slice(0, 10);
+const fmtFecha = f => { if (!f) return ''; const [y, m, d] = f.split('-'); return `${d}-${m}-${y}`; };
+const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const debounce = (fn, ms = 200) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+function genId(d = new Date()) {
+  const r = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `E${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${r}`;
+}
+
+let toastTimer;
+function toast(msg, tipo = 'ok', ms = 3200) {
+  const t = $('#toast');
+  const cls = { ok: 'bg-emerald-600 text-white', warn: 'bg-amber-400 text-slate-900', err: 'bg-red-600 text-white', info: 'bg-slate-900 text-white' };
+  t.className = `fixed left-1/2 -translate-x-1/2 bottom-6 z-[60] max-w-[92vw] px-4 py-3 rounded-xl shadow-xl text-sm font-medium ${cls[tipo] || cls.info}`;
+  t.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.add('hidden'), ms);
+}
+
+function descargarBlob(blob, nombre) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nombre;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+
+/* ------------------------------- RUT -------------------------------- */
+const limpiarRut = r => (r || '').replace(/[^0-9kK]/g, '').toUpperCase();
+function formatearRut(r) {
+  const c = limpiarRut(r);
+  if (c.length < 2) return c;
+  return c.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + '-' + c.slice(-1);
+}
+function validarRut(r) {
+  const c = limpiarRut(r);
+  if (!/^\d{7,8}[0-9K]$/.test(c)) return false;
+  const cuerpo = c.slice(0, -1), dv = c.slice(-1);
+  let s = 0, m = 2;
+  for (let i = cuerpo.length - 1; i >= 0; i--) { s += +cuerpo[i] * m; m = m === 7 ? 2 : m + 1; }
+  const res = 11 - (s % 11);
+  return (res === 11 ? '0' : res === 10 ? 'K' : String(res)) === dv;
+}
+const claveDoc = r => limpiarRut(r) || String(r || '').trim().toUpperCase();
+
+/* ------------------- Almacenamiento local (IndexedDB) ------------------- */
+const DB = {
+  db: null, fallback: false, LSKEY: 'epp_registros_fallback',
+  open() {
+    return new Promise(resolve => {
+      if (!('indexedDB' in window)) { this.fallback = true; return resolve(); }
+      const req = indexedDB.open('epp_control_db', 1);
+      req.onupgradeneeded = () => {
+        const d = req.result;
+        if (!d.objectStoreNames.contains('entregas')) {
+          const s = d.createObjectStore('entregas', { keyPath: 'id' });
+          s.createIndex('fecha', 'fecha'); s.createIndex('rut', 'rut');
+        }
+      };
+      req.onsuccess = () => { this.db = req.result; resolve(); };
+      req.onerror = () => { this.fallback = true; resolve(); };
+    });
+  },
+  _store(mode) { return this.db.transaction('entregas', mode).objectStore('entregas'); },
+  _req(r) { return new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  _lsGet() { try { return JSON.parse(localStorage.getItem(this.LSKEY) || '[]'); } catch { return []; } },
+  _lsSet(a) { localStorage.setItem(this.LSKEY, JSON.stringify(a)); },
+  async all() { return this.fallback ? this._lsGet() : this._req(this._store('readonly').getAll()); },
+  async put(o) {
+    if (this.fallback) { const a = this._lsGet().filter(x => x.id !== o.id); a.push(o); return this._lsSet(a); }
+    return this._req(this._store('readwrite').put(o));
+  },
+  async del(id) {
+    if (this.fallback) return this._lsSet(this._lsGet().filter(x => x.id !== id));
+    return this._req(this._store('readwrite').delete(id));
+  },
+  async clear() { if (this.fallback) return this._lsSet([]); return this._req(this._store('readwrite').clear()); }
+};
+
+/* ---------------------------- Estado / config ---------------------------- */
+const state = { records: [], settings: {}, fechaEditada: false, syncing: false, filtrados: [] };
+const CFG_KEY = 'epp_settings';
+function loadSettings() {
+  try { state.settings = Object.assign({ webhookUrl: '', token: '', responsable: '', autoSync: true }, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); }
+  catch { state.settings = { webhookUrl: '', token: '', responsable: '', autoSync: true }; }
+}
+const saveSettings = () => localStorage.setItem(CFG_KEY, JSON.stringify(state.settings));
+
+/* ------------------------------ Catálogo EPP ------------------------------ */
+const TALLAS_ROPA = ['XS','S','M','L','XL','XXL','XXXL'];
+const TALLAS_CALZADO = Array.from({ length: 13 }, (_, i) => String(35 + i));
+const EPP_CATALOGO = [
+  { nombre: 'Casco de seguridad',            tallas: ['Blanco','Amarillo','Azul','Verde','Rojo','Naranjo'] },
+  { nombre: 'Barbiquejo',                    tallas: ['Único'] },
+  { nombre: 'Lentes de seguridad',           tallas: ['Claro','Oscuro','Espejado','Sobre lentes ópticos'] },
+  { nombre: 'Antiparras',                    tallas: ['Ventilación indirecta','Antiempañante'] },
+  { nombre: 'Careta facial',                 tallas: ['Policarbonato','Esmerilado','Soldador'] },
+  { nombre: 'Chaleco reflectante',           tallas: TALLAS_ROPA },
+  { nombre: 'Ropa de trabajo / Overol',      tallas: TALLAS_ROPA },
+  { nombre: 'Zapatos de seguridad',          tallas: TALLAS_CALZADO },
+  { nombre: 'Botas de goma de seguridad',    tallas: TALLAS_CALZADO },
+  { nombre: 'Guantes de cabritilla',         tallas: ['S','M','L','XL'] },
+  { nombre: 'Guantes de nitrilo',            tallas: ['S','M','L','XL'] },
+  { nombre: 'Guantes anticorte',             tallas: ['S','M','L','XL'] },
+  { nombre: 'Protección auditiva (tapones)', tallas: ['Desechable','Reutilizable'] },
+  { nombre: 'Protección auditiva (fono)',    tallas: ['Fono a casco','Fono de cintillo'] },
+  { nombre: 'Respirador medio rostro',       tallas: ['S','M','L'] },
+  { nombre: 'Filtros / cartuchos',           tallas: ['P100','2097','6003','60926'] },
+  { nombre: 'Mascarilla desechable',         tallas: ['N95','KN95'] },
+  { nombre: 'Arnés de seguridad',            tallas: ['S/M','L/XL','Universal'] },
+  { nombre: 'Cabo de vida',                  tallas: ['Simple','Doble (Y)','Con absorbedor'] },
+  { nombre: 'Legionario / cubrenuca',        tallas: ['Único'] },
+  { nombre: 'Bloqueador solar',              tallas: ['FPS 50+'] }
+];
+const MOTIVOS = ['Dotación inicial', 'Reposición por desgaste', 'Reposición por daño', 'Reposición por pérdida', 'Cambio de talla', 'Otro'];
+let rowSeq = 0;
+
+function eppRowHTML(item) {
+  const id = 'dlepp' + (rowSeq++);
+  return `
+  <div data-row data-epp="${esc(item.nombre)}" class="rounded-xl border border-slate-200 transition">
+    <label class="flex items-center gap-3 p-3 cursor-pointer select-none">
+      <input type="checkbox" class="chk w-6 h-6 accent-amber-500 shrink-0">
+      <span class="flex-1 font-medium">${esc(item.nombre)}</span>
+      ${item.custom ? '<span class="chip">Otro</span>' : ''}
+    </label>
+    <div class="det hidden grid grid-cols-2 sm:grid-cols-[auto_1fr_1fr] gap-2 px-3 pb-3">
+      <div class="col-span-2 sm:col-span-1">
+        <span class="text-xs font-semibold text-slate-500">Cantidad</span>
+        <div class="flex items-center gap-1">
+          <button type="button" class="dec qbtn" aria-label="Restar">−</button>
+          <input type="number" min="1" max="999" value="1" inputmode="numeric" class="qty w-16 h-11 text-center rounded-xl border border-slate-300 text-lg font-bold">
+          <button type="button" class="inc qbtn" aria-label="Sumar">+</button>
+        </div>
+      </div>
+      <div><span class="text-xs font-semibold text-slate-500">Tipo / talla</span>
+        <input class="talla inp !py-2" list="${id}" placeholder="Opcional"></div>
+      <div><span class="text-xs font-semibold text-slate-500">Motivo</span>
+        <select class="motivo inp !py-2">${MOTIVOS.map(m => `<option>${esc(m)}</option>`).join('')}</select></div>
+    </div>
+    <datalist id="${id}">${(item.tallas || []).map(t => `<option value="${esc(t)}">`).join('')}</datalist>
+  </div>`;
+}
+
+function renderCatalogo() {
+  $('#eppList').innerHTML = EPP_CATALOGO.map(eppRowHTML).join('');
+  $('#motivoGeneral').innerHTML = MOTIVOS.map(m => `<option>${esc(m)}</option>`).join('');
+  actualizarConteoEpp();
+}
+
+function toggleRow(row, on) {
+  row.querySelector('.chk').checked = on;
+  row.querySelector('.det').classList.toggle('hidden', !on);
+  row.classList.toggle('border-amber-400', on);
+  row.classList.toggle('bg-amber-50', on);
+  if (on) row.querySelector('.motivo').value = $('#motivoGeneral').value;
+  actualizarConteoEpp();
+}
+
+function actualizarConteoEpp() {
+  const sel = $$('#eppList [data-row]').filter(r => r.querySelector('.chk').checked);
+  const unid = sel.reduce((s, r) => s + (parseInt(r.querySelector('.qty').value) || 0), 0);
+  const b = $('#eppCount');
+  b.textContent = sel.length ? `${sel.length} EPP · ${unid} unid.` : '0 seleccionados';
+  b.className = sel.length ? 'badge-ok' : 'badge-warn';
+}
+
+function initEppEventos() {
+  const list = $('#eppList');
+  list.addEventListener('change', e => {
+    const row = e.target.closest('[data-row]'); if (!row) return;
+    if (e.target.classList.contains('chk')) toggleRow(row, e.target.checked);
+    if (e.target.classList.contains('qty')) {
+      let v = parseInt(e.target.value) || 1; e.target.value = Math.min(Math.max(v, 1), 999); actualizarConteoEpp();
+    }
+  });
+  list.addEventListener('click', e => {
+    const btn = e.target.closest('.inc, .dec'); if (!btn) return;
+    const q = btn.closest('[data-row]').querySelector('.qty');
+    q.value = Math.min(Math.max((parseInt(q.value) || 1) + (btn.classList.contains('inc') ? 1 : -1), 1), 999);
+    actualizarConteoEpp();
+  });
+  $('#eppBuscar').addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    $$('#eppList [data-row]').forEach(r => r.classList.toggle('hidden', q && !r.dataset.epp.toLowerCase().includes(q)));
+  });
+  const agregarOtro = () => {
+    const inp = $('#otroNombre'); const nombre = inp.value.trim();
+    if (!nombre) { inp.focus(); return; }
+    const existente = $$('#eppList [data-row]').find(r => r.dataset.epp.toLowerCase() === nombre.toLowerCase());
+    if (existente) { toggleRow(existente, true); existente.scrollIntoView({ block: 'center', behavior: 'smooth' }); inp.value = ''; return; }
+    list.insertAdjacentHTML('beforeend', eppRowHTML({ nombre, tallas: [], custom: true }));
+    toggleRow(list.lastElementChild, true);
+    inp.value = '';
+    toast(`"${nombre}" agregado a la entrega`, 'info');
+  };
+  $('#btnOtroEpp').addEventListener('click', agregarOtro);
+  $('#otroNombre').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarOtro(); } });
+}
+
+function recolectarItems() {
+  return $$('#eppList [data-row]').filter(r => r.querySelector('.chk').checked).map(r => ({
+    epp: r.dataset.epp,
+    cantidad: parseInt(r.querySelector('.qty').value) || 0,
+    talla: r.querySelector('.talla').value.trim(),
+    motivo: r.querySelector('.motivo').value
+  }));
+}
+
+/* --------------------------- Firma (Canvas) --------------------------- */
+const Sig = (() => {
+  const c = $('#sigCanvas'), ctx = c.getContext('2d'), ph = $('#sigPlaceholder');
+  let drawing = false, empty = true, last = null;
+
+  function setup() {
+    const r = c.getBoundingClientRect();
+    if (!r.width) return;
+    const prev = empty ? null : c.toDataURL();
+    const dpr = Math.max(window.devicePixelRatio || 1, 1);
+    c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0f172a'; ctx.fillStyle = '#0f172a';
+    if (prev) {
+      const img = new Image();
+      img.onload = () => { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(img, 0, 0, c.width, c.height); ctx.restore(); };
+      img.src = prev;
+    }
+  }
+  const pos = e => { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, p: e.pressure }; };
+  const ancho = p => (p && p > 0 && p !== 0.5) ? 1.2 + p * 2.8 : 2.4;  // grosor según presión (lápiz)
+  function marcar() { if (empty) { empty = false; ph.classList.add('hidden'); } }
+
+  c.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { c.setPointerCapture(e.pointerId); } catch {}
+    drawing = true; last = pos(e);
+    ctx.beginPath(); ctx.arc(last.x, last.y, ancho(last.p) / 2, 0, Math.PI * 2); ctx.fill();
+    marcar();
+  });
+  c.addEventListener('pointermove', e => {
+    if (!drawing) return;
+    e.preventDefault();
+    let evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    if (!evs.length) evs = [e];
+    for (const ev of evs) {
+      const p = pos(ev);
+      ctx.beginPath(); ctx.lineWidth = ancho(p.p);
+      ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+      last = p;
+    }
+  });
+  ['pointerup', 'pointercancel'].forEach(t => c.addEventListener(t, () => { drawing = false; last = null; }));
+
+  if ('ResizeObserver' in window) new ResizeObserver(debounce(setup, 120)).observe(c);
+  else window.addEventListener('resize', debounce(setup, 120));
+
+  return {
+    setup,
+    isEmpty: () => empty,
+    clear() {
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height); ctx.restore();
+      empty = true; ph.classList.remove('hidden');
+    },
+    /** PNG con fondo blanco, ancho 500 px (liviano para guardar y sincronizar). */
+    toDataURL() {
+      if (empty) return null;
+      const w = 500, h = Math.round(500 * c.height / c.width);
+      const o = document.createElement('canvas'); o.width = w; o.height = h;
+      const octx = o.getContext('2d');
+      octx.fillStyle = '#fff'; octx.fillRect(0, 0, w, h);
+      octx.drawImage(c, 0, 0, w, h);
+      return o.toDataURL('image/png');
+    }
+  };
+})();
+
+/* ------------------------------ Formulario ------------------------------ */
+function setAhora() { $('#fFechaHora').value = localISO(); state.fechaEditada = false; }
+
+function ultimoRegistroDe(rut) {
+  const k = claveDoc(rut);
+  return state.records.filter(r => claveDoc(r.rut) === k)
+    .sort((a, b) => (b.fecha + b.hora).localeCompare(a.fecha + a.hora));
+}
+
+function onRutBlur() {
+  const inp = $('#fRut'), hint = $('#rutHint'), ext = $('#fExtranjero').checked;
+  const v = inp.value.trim();
+  const info = $('#trabajadorInfo');
+  if (!v) { hint.textContent = 'Se completa automáticamente si el trabajador ya está registrado.'; hint.className = 'text-xs text-slate-500'; info.classList.add('hidden'); return; }
+  if (!ext) {
+    inp.value = formatearRut(v);
+    const ok = validarRut(inp.value);
+    hint.textContent = ok ? '✓ RUT válido' : '✗ RUT inválido (revise el dígito verificador o marque DNI / pasaporte)';
+    hint.className = 'text-xs ' + (ok ? 'text-emerald-600' : 'text-red-600 font-semibold');
+  } else { hint.textContent = 'Documento extranjero: sin validación de dígito verificador'; hint.className = 'text-xs text-slate-500'; }
+
+  const hist = ultimoRegistroDe(inp.value);
+  if (!hist.length) { info.classList.add('hidden'); return; }
+  const u = hist[0];
+  [['#fNombre', u.nombre], ['#fCargo', u.cargo], ['#fArea', u.area], ['#fFaena', u.faena], ['#fTurno', u.turno]]
+    .forEach(([s, val]) => { const el = $(s); if (!el.value.trim() && val) el.value = val; });
+  actualizarNombreFirma();
+  const ult = hist.slice(0, 3).map(r => `<li><b>${fmtFecha(r.fecha)}</b> — ${r.items.map(i => `${esc(i.epp)} ×${i.cantidad}`).join(', ')}</li>`).join('');
+  info.innerHTML = `<p class="font-semibold text-sky-800">Trabajador con ${hist.length} entrega(s) previa(s). Datos completados automáticamente.</p>
+    <ul class="mt-1 text-sky-900 space-y-0.5 list-disc pl-5">${ult}</ul>`;
+  info.classList.remove('hidden');
+}
+
+function actualizarNombreFirma() {
+  const n = $('#fNombre').value.trim(), r = $('#fRut').value.trim();
+  $('#sigNombre').textContent = n ? `${n}${r ? ' · ' + r : ''}` : '';
+}
+
+function actualizarDatalists() {
+  const uniq = k => [...new Set(state.records.map(r => (r[k] || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+  $('#dlCargos').innerHTML = uniq('cargo').map(v => `<option value="${esc(v)}">`).join('');
+  $('#dlAreas').innerHTML  = uniq('area').map(v => `<option value="${esc(v)}">`).join('');
+  $('#dlFaenas').innerHTML = uniq('faena').map(v => `<option value="${esc(v)}">`).join('');
+}
+
+function resetForm(mantenerFaena = true) {
+  const faena = $('#fFaena').value, turno = $('#fTurno').value, area = $('#fArea').value;
+  $('#formEntrega').reset();
+  if (mantenerFaena) { $('#fFaena').value = faena; $('#fTurno').value = turno; $('#fArea').value = area; }
+  $('#fResponsable').value = state.settings.responsable || '';
+  $$('#eppList [data-row]').forEach(r => { toggleRow(r, false); r.classList.remove('hidden'); r.querySelector('.qty').value = 1; r.querySelector('.talla').value = ''; });
+  $$('#eppList [data-row]').filter(r => r.querySelector('.chip')).forEach(r => r.remove());
+  $('#trabajadorInfo').classList.add('hidden');
+  $('#rutHint').textContent = 'Se completa automáticamente si el trabajador ya está registrado.';
+  $('#rutHint').className = 'text-xs text-slate-500';
+  Sig.clear(); setAhora(); actualizarNombreFirma(); actualizarConteoEpp();
+}
+
+async function guardarEntrega(e) {
+  e.preventDefault();
+  const fh = $('#fFechaHora').value;
+  const rut = $('#fRut').value.trim(), nombre = $('#fNombre').value.trim(), ext = $('#fExtranjero').checked;
+  const items = recolectarItems();
+
+  if (!fh) return toast('Indique la fecha y hora de entrega', 'err');
+  if (!rut) { $('#fRut').focus(); return toast('Ingrese el RUT o documento del trabajador', 'err'); }
+  if (!ext && !validarRut(rut)) { $('#fRut').focus(); return toast('El RUT no es válido. Si es extranjero, marque "DNI / pasaporte".', 'err', 4500); }
+  if (!nombre) { $('#fNombre').focus(); return toast('Ingrese el nombre del trabajador', 'err'); }
+  if (!items.length) { $('#eppList').scrollIntoView({ behavior: 'smooth', block: 'center' }); return toast('Seleccione al menos un EPP', 'err'); }
+  if (items.some(i => i.cantidad < 1)) return toast('Revise las cantidades (mínimo 1)', 'err');
+  if (Sig.isEmpty() && !confirm('El trabajador no ha firmado.\n¿Desea guardar la entrega SIN firma? Se registrará "Tiene Firma: No".')) {
+    $('#sigCanvas').scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+  }
+
+  const ahora = new Date();
+  const registro = {
+    id: genId(ahora),
+    fecha: fh.slice(0, 10), hora: fh.slice(11, 16),
+    rut: ext ? rut.toUpperCase() : formatearRut(rut), documentoExtranjero: ext,
+    nombre, cargo: $('#fCargo').value.trim(), area: $('#fArea').value.trim(),
+    faena: $('#fFaena').value.trim(), turno: $('#fTurno').value.trim(),
+    items, observaciones: $('#fObs').value.trim(),
+    firma: Sig.toDataURL(),
+    entregadoPor: $('#fResponsable').value.trim(),
+    creadoEn: ahora.toISOString(), dispositivo: navigator.userAgent.slice(0, 120),
+    synced: false, syncedAt: null
+  };
+
+  const btn = $('#btnGuardar'); btn.disabled = true;
+  try {
+    await DB.put(registro);
+    state.records.push(registro);
+    if (registro.entregadoPor && registro.entregadoPor !== state.settings.responsable) { state.settings.responsable = registro.entregadoPor; saveSettings(); }
+    toast(`✓ Entrega registrada: ${nombre} (${items.length} EPP)`);
+    resetForm(true);
+    refrescarTodo();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => $('#fRut').focus(), 400);
+    if (state.settings.autoSync && navigator.onLine) syncPending(false);
+  } catch (err) {
+    console.error(err);
+    toast('No se pudo guardar en el dispositivo: ' + err.message, 'err', 6000);
+  } finally { btn.disabled = false; }
+}
+
+/* ------------------------- Historial / Dashboard ------------------------- */
+const unidades = r => r.items.reduce((s, i) => s + (+i.cantidad || 0), 0);
+const ordenar = arr => arr.sort((a, b) => (b.fecha + b.hora + b.creadoEn).localeCompare(a.fecha + a.hora + a.creadoEn));
+
+function aplicarFiltros() {
+  const q = $('#filQ').value.trim().toLowerCase(), qr = limpiarRut(q);
+  const desde = $('#filDesde').value, hasta = $('#filHasta').value, tipo = $('#filTipo').value;
+  return ordenar(state.records.filter(r => {
+    if (desde && r.fecha < desde) return false;
+    if (hasta && r.fecha > hasta) return false;
+    if (tipo && !r.items.some(i => i.epp === tipo)) return false;
+    if (q) {
+      const enNombre = (r.nombre || '').toLowerCase().includes(q);
+      const enRut = (r.rut || '').toLowerCase().includes(q) || (qr.length >= 3 && limpiarRut(r.rut).includes(qr));
+      if (!enNombre && !enRut) return false;
+    }
+    return true;
+  }));
+}
+
+function totalesPorEpp(regs, soloTipo = '') {
+  const m = new Map();
+  regs.forEach(r => r.items.forEach(i => { if (!soloTipo || i.epp === soloTipo) m.set(i.epp, (m.get(i.epp) || 0) + (+i.cantidad || 0)); }));
+  return [...m.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+function renderKPIs() {
+  const hoy = hoyISO();
+  const deHoy = state.records.filter(r => r.fecha === hoy);
+  $('#kpiHoy').textContent = deHoy.length;
+  $('#kpiHoySub').textContent = `${new Set(deHoy.map(r => claveDoc(r.rut))).size} trabajador(es)`;
+  $('#kpiUnid').textContent = deHoy.reduce((s, r) => s + unidades(r), 0);
+
+  const top = totalesPorEpp(state.filtrados);
+  $('#kpiTop').textContent = top[0] ? top[0][0] : '—';
+  $('#kpiTopSub').textContent = top[0] ? `${top[0][1]} unid. · según filtros` : 'sin datos en el filtro';
+
+  const pend = state.records.filter(r => !r.synced).length;
+  $('#kpiPend').textContent = pend;
+  $('#kpiPendSub').textContent = state.settings.webhookUrl ? (pend ? 'pendientes de envío' : 'todo sincronizado ✓') : 'nube no configurada';
+}
+
+function renderChart() {
+  const top = totalesPorEpp(state.filtrados, $('#filTipo').value).slice(0, 7);
+  const max = top[0]?.[1] || 1;
+  $('#chartTop').innerHTML = top.length ? top.map(([n, v]) => `
+    <div><div class="flex justify-between gap-2"><span class="truncate">${esc(n)}</span><span class="font-bold">${v}</span></div>
+    <div class="h-2.5 bg-slate-100 rounded-full mt-1"><div class="h-2.5 bg-amber-400 rounded-full" style="width:${Math.max(4, v / max * 100)}%"></div></div></div>`).join('')
+    : '<p class="text-slate-400">Sin datos para mostrar.</p>';
+}
+
+function renderLista() {
+  const list = state.filtrados, LIM = 200;
+  $('#listaInfo').textContent = `${list.length} de ${state.records.length} registro(s)`;
+  if (!list.length) {
+    $('#lista').innerHTML = `<div class="card text-center text-slate-500 py-10">${state.records.length ? 'No hay entregas que coincidan con los filtros.' : 'Aún no hay entregas registradas en este dispositivo.'}</div>`;
+    return;
+  }
+  const sincronizable = !!state.settings.webhookUrl;
+  $('#lista').innerHTML = list.slice(0, LIM).map(r => {
+    const [y, m, d] = r.fecha.split('-');
+    return `
+    <button data-id="${esc(r.id)}" class="w-full text-left p-3 sm:p-4 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 shadow-sm flex gap-3 items-start">
+      <div class="shrink-0 w-14 text-center rounded-xl bg-slate-900 text-white py-1.5">
+        <div class="text-lg font-black leading-none">${d}</div><div class="text-[11px] uppercase text-amber-300">${MESES[+m - 1]} ’${y.slice(2)}</div><div class="text-[11px] text-slate-300">${esc(r.hora)}</div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold truncate">${esc(r.nombre)}</div>
+        <div class="text-xs text-slate-500 truncate">${esc(r.rut)} · ${esc(r.cargo || 'Sin cargo')}${r.faena ? ' · ' + esc(r.faena) : ''}</div>
+        <div class="mt-1.5 flex flex-wrap gap-1">${r.items.map(i => `<span class="chip">${esc(i.epp)} <b>×${i.cantidad}</b></span>`).join('')}</div>
+      </div>
+      <div class="flex flex-col items-end gap-1 shrink-0">
+        ${r.firma ? '<span class="badge-ok">Firmado</span>' : '<span class="badge-bad">Sin firma</span>'}
+        ${sincronizable ? (r.synced ? '<span class="badge-ok">☁ En nube</span>' : '<span class="badge-warn">Pendiente</span>') : ''}
+      </div>
+    </button>`;
+  }).join('') + (list.length > LIM ? `<p class="text-center text-sm text-slate-500 py-2">Mostrando ${LIM} de ${list.length}. Use los filtros o exporte a Excel para ver todo.</p>` : '');
+}
+
+function renderFiltroTipos() {
+  const sel = $('#filTipo'), actual = sel.value;
+  const tipos = [...new Set(state.records.flatMap(r => r.items.map(i => i.epp)))].sort((a, b) => a.localeCompare(b, 'es'));
+  sel.innerHTML = '<option value="">Todos</option>' + tipos.map(t => `<option ${t === actual ? 'selected' : ''}>${esc(t)}</option>`).join('');
+}
+
+function refrescarHistorial() {
+  state.filtrados = aplicarFiltros();
+  renderKPIs(); renderChart(); renderLista();
+}
+
+function refrescarTodo() {
+  renderFiltroTipos(); actualizarDatalists(); refrescarHistorial(); actualizarBadges();
+}
+
+function abrirDetalle(id) {
+  const r = state.records.find(x => x.id === id); if (!r) return;
+  const fila = (k, v) => `<div class="py-2 border-b border-slate-100 grid grid-cols-3 gap-2"><dt class="text-slate-500 text-sm">${k}</dt><dd class="col-span-2 font-medium break-words">${v || '<span class="text-slate-400">—</span>'}</dd></div>`;
+  $('#detalleBody').innerHTML = `
+    <div class="flex flex-wrap gap-2 mb-3">
+      <span class="chip font-mono">${esc(r.id)}</span>
+      ${r.firma ? '<span class="badge-ok">Firmado</span>' : '<span class="badge-bad">Sin firma</span>'}
+      ${state.settings.webhookUrl ? (r.synced ? '<span class="badge-ok">Sincronizado</span>' : '<span class="badge-warn">Pendiente de sincronizar</span>') : ''}
+    </div>
+    <dl>
+      ${fila('Fecha / hora', `${fmtFecha(r.fecha)} ${esc(r.hora)}`)}
+      ${fila('Trabajador', esc(r.nombre))}
+      ${fila(r.documentoExtranjero ? 'DNI / Pasaporte' : 'RUT', esc(r.rut))}
+      ${fila('Cargo', esc(r.cargo))}
+      ${fila('Área', esc(r.area))}
+      ${fila('Faena / turno', esc([r.faena, r.turno].filter(Boolean).join(' · ')))}
+      ${fila('Entregado por', esc(r.entregadoPor))}
+    </dl>
+    <h4 class="font-bold mt-4 mb-2">EPP entregados</h4>
+    <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <table class="w-full text-sm"><thead class="bg-slate-50 text-left"><tr><th class="p-2">EPP</th><th class="p-2 text-center">Cant.</th><th class="p-2">Talla</th><th class="p-2">Motivo</th></tr></thead>
+      <tbody>${r.items.map(i => `<tr class="border-t"><td class="p-2">${esc(i.epp)}</td><td class="p-2 text-center font-bold">${i.cantidad}</td><td class="p-2">${esc(i.talla) || '—'}</td><td class="p-2">${esc(i.motivo)}</td></tr>`).join('')}</tbody></table>
+    </div>
+    ${r.observaciones ? `<h4 class="font-bold mt-4 mb-1">Observaciones</h4><p class="text-sm whitespace-pre-wrap bg-slate-50 rounded-xl p-3">${esc(r.observaciones)}</p>` : ''}
+    <h4 class="font-bold mt-4 mb-2">Firma</h4>
+    ${r.firma ? `<img src="${r.firma}" alt="Firma del trabajador" class="w-full max-w-md border rounded-xl bg-white">` : '<p class="text-sm text-red-600">Entrega registrada sin firma.</p>'}
+    <div class="flex gap-2 mt-5">
+      <button id="btnDel" class="btn btn-sec text-red-600 flex-1">Eliminar del dispositivo</button>
+      <button class="btn btn-dark flex-1" onclick="cerrarModal('modalDetalle')">Cerrar</button>
+    </div>`;
+  $('#btnDel').onclick = async () => {
+    const extra = r.synced ? '\n\nNota: ya fue enviada a la nube; allá seguirá existiendo.' : '';
+    if (!confirm(`¿Eliminar la entrega de ${r.nombre} del ${fmtFecha(r.fecha)}?${extra}`)) return;
+    await DB.del(r.id);
+    state.records = state.records.filter(x => x.id !== r.id);
+    cerrarModal('modalDetalle'); refrescarTodo(); toast('Registro eliminado', 'info');
+  };
+  abrirModal('modalDetalle');
+}
+
+/* ---------------------------- Exportación Excel ---------------------------- */
+const COLUMNAS = ['ID Registro', 'Fecha', 'Hora', 'RUT', 'Trabajador', 'Cargo', 'Área', 'Faena', 'Tipo de EPP', 'Cantidad', 'Talla', 'Motivo', 'Tiene Firma', 'Observaciones', 'Turno', 'Entregado por', 'Sincronizado'];
+
+function filasExcel(regs) {
+  const out = [];
+  [...regs].sort((a, b) => (a.fecha + a.hora).localeCompare(b.fecha + b.hora)).forEach(r => r.items.forEach(i => out.push([
+    r.id, r.fecha, r.hora, r.rut, r.nombre, r.cargo || '', r.area || '', r.faena || '',
+    i.epp, Number(i.cantidad) || 0, i.talla || '', i.motivo || '',
+    r.firma ? 'Sí' : 'No', r.observaciones || '', r.turno || '', r.entregadoPor || '', r.synced ? 'Sí' : 'No'
+  ])));
+  return out;
+}
+
+function exportarExcel(regs, etiqueta) {
+  if (!regs.length) return toast('No hay registros para exportar', 'warn');
+  const filas = filasExcel(regs);
+  const d = new Date();
+  const base = `EPP_Entregas_${etiqueta}_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+
+  if (typeof XLSX === 'undefined') {           // Respaldo si la librería no cargó (sin señal y sin caché)
+    const csv = [COLUMNAS, ...filas].map(f => f.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    descargarBlob(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }), base + '.csv');
+    return toast('Librería Excel no disponible sin conexión: se descargó CSV (ábralo con Excel)', 'warn', 5500);
+  }
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([COLUMNAS, ...filas]);
+  ws['!cols'] = [24, 11, 7, 13, 30, 20, 20, 20, 30, 9, 12, 24, 11, 40, 10, 24, 12].map(wch => ({ wch }));
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: filas.length, c: COLUMNAS.length - 1 } }) };
+  XLSX.utils.book_append_sheet(wb, ws, 'Entregas');
+
+  const res = totalesPorEpp(regs).map(([epp, u]) => [epp, u, regs.filter(r => r.items.some(i => i.epp === epp)).length]);
+  const ws2 = XLSX.utils.aoa_to_sheet([['Tipo de EPP', 'Unidades entregadas', 'N° de entregas'], ...res,
+    [], ['Total registros', regs.length], ['Total unidades', regs.reduce((s, r) => s + unidades(r), 0)],
+    ['Generado', `${fmtFecha(hoyISO())} ${pad(d.getHours())}:${pad(d.getMinutes())}`]]);
+  ws2['!cols'] = [{ wch: 32 }, { wch: 20 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Resumen por EPP');
+
+  XLSX.writeFile(wb, base + '.xlsx');
+  toast(`Excel generado: ${filas.length} fila(s)`);
+}
+
+/* ------------------------- Sincronización con la nube ------------------------- */
+async function postWebhook(payload) {
+  // text/plain evita la solicitud "preflight" de CORS que Apps Script no admite.
+  const resp = await fetch(state.settings.webhookUrl, {
+    method: 'POST', redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ token: state.settings.token || '', ...payload })
+  });
+  const txt = await resp.text();
+  try { return JSON.parse(txt); } catch { throw new Error('Respuesta no válida del servidor (¿URL correcta y acceso "Cualquier usuario"?)'); }
+}
+
+async function syncPending(manual) {
+  if (!state.settings.webhookUrl) { if (manual) { toast('Configure primero la URL de Google Sheets', 'warn'); abrirConfig(); } return; }
+  if (!navigator.onLine) { if (manual) toast('Sin conexión: los registros quedan guardados y se enviarán al volver la señal', 'warn', 4500); return; }
+  if (state.syncing) return;
+  const pend = state.records.filter(r => !r.synced);
+  if (!pend.length) { if (manual) toast('Todo está sincronizado ✓'); return; }
+
+  state.syncing = true; $('#syncIcon').classList.add('animate-spin');
+  let ok = 0, err = null;
+  for (const r of pend) {
+    try {
+      const j = await postWebhook({ action: 'registrar', registro: r });
+      if (!j.ok) { err = j.error || 'Error desconocido'; break; }
+      r.synced = true; r.syncedAt = new Date().toISOString();
+      await DB.put(r); ok++;
+    } catch (e) { err = e.message; break; }
+  }
+  state.syncing = false; $('#syncIcon').classList.remove('animate-spin');
+  refrescarHistorial(); actualizarBadges();
+  if (err) toast(`Sincronizados ${ok} de ${pend.length}. Error: ${err}`, 'err', 6000);
+  else if (ok) toast(`☁ ${ok} registro(s) enviados a Google Sheets`);
+}
+
+function actualizarBadges() {
+  const on = navigator.onLine, nb = $('#netBadge');
+  nb.textContent = on ? '● En línea' : '● Sin señal';
+  nb.className = `hidden sm:inline-flex text-xs px-2 py-1 rounded-full font-medium ${on ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`;
+  const pend = state.records.filter(r => !r.synced).length, pb = $('#pendBadge');
+  const mostrar = !!state.settings.webhookUrl && pend > 0;
+  pb.textContent = pend > 99 ? '99+' : pend;
+  pb.classList.toggle('hidden', !mostrar);
+  $('#hdrSub').textContent = `${on ? 'En línea' : 'Modo sin señal — los datos se guardan en el equipo'}${state.settings.webhookUrl ? '' : ' · solo local'}`;
+}
+
+/* --------------------------------- Modales --------------------------------- */
+function abrirModal(id) { $('#' + id).classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+function cerrarModal(id) { $('#' + id).classList.add('hidden'); if (!$$('.modal').some(m => !m.classList.contains('hidden'))) document.body.style.overflow = ''; }
+window.cerrarModal = cerrarModal;
+
+function abrirConfig() {
+  const s = state.settings;
+  $('#cfgUrl').value = s.webhookUrl; $('#cfgToken').value = s.token; $('#cfgAuto').checked = !!s.autoSync;
+  $('#cfgEstado').textContent = '';
+  $('#cfgInfo').textContent = `Almacenamiento: ${DB.fallback ? 'localStorage (respaldo)' : 'IndexedDB'} · ${state.records.length} registro(s) en este dispositivo.`;
+  abrirModal('modalConfig');
+}
+
+function leerConfigForm() {
+  state.settings.webhookUrl = $('#cfgUrl').value.trim();
+  state.settings.token = $('#cfgToken').value.trim();
+  state.settings.autoSync = $('#cfgAuto').checked;
+}
+
+/* ------------------------------ Inicialización ------------------------------ */
+function initEventos() {
+  // Pestañas
+  $$('.tab').forEach(b => b.addEventListener('click', () => {
+    $$('.tab').forEach(x => x.classList.toggle('active', x === b));
+    const t = b.dataset.tab;
+    $('#tab-registro').classList.toggle('hidden', t !== 'registro');
+    $('#tab-historial').classList.toggle('hidden', t !== 'historial');
+    if (t === 'historial') refrescarHistorial(); else requestAnimationFrame(Sig.setup);
+    window.scrollTo({ top: 0 });
+  }));
+
+  // Formulario
+  $('#formEntrega').addEventListener('submit', guardarEntrega);
+  $('#btnAhora').addEventListener('click', setAhora);
+  $('#fFechaHora').addEventListener('change', () => { state.fechaEditada = true; });
+  $('#fRut').addEventListener('blur', onRutBlur);
+  $('#fRut').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#fNombre').focus(); } });
+  $('#fExtranjero').addEventListener('change', onRutBlur);
+  $('#fNombre').addEventListener('input', actualizarNombreFirma);
+  $('#btnLimpiarFirma').addEventListener('click', () => Sig.clear());
+  $('#btnReset').addEventListener('click', () => { if (confirm('¿Limpiar todos los campos del formulario?')) resetForm(false); });
+  setInterval(() => { if (!state.fechaEditada) $('#fFechaHora').value = localISO(); }, 30000);
+
+  // Filtros
+  const rf = debounce(refrescarHistorial, 150);
+  ['#filQ', '#filDesde', '#filHasta', '#filTipo'].forEach(s => $(s).addEventListener('input', rf));
+  const setRango = (d, h) => { $('#filDesde').value = d; $('#filHasta').value = h; refrescarHistorial(); };
+  $('#btnFilHoy').onclick = () => setRango(hoyISO(), hoyISO());
+  $('#btnFil7').onclick = () => { const d = new Date(); d.setDate(d.getDate() - 6); setRango(localISO(d).slice(0, 10), hoyISO()); };
+  $('#btnFilMes').onclick = () => setRango(hoyISO().slice(0, 8) + '01', hoyISO());
+  $('#btnFilLimpiar').onclick = () => { $('#filQ').value = ''; $('#filTipo').value = ''; setRango('', ''); };
+  $('#lista').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (b) abrirDetalle(b.dataset.id); });
+
+  // Exportación
+  $('#btnXlsxTodo').onclick = () => exportarExcel(state.records, 'Completo');
+  $('#btnXlsxFiltro').onclick = () => exportarExcel(state.filtrados, 'Filtrado');
+
+  // Sincronización y conectividad
+  $('#btnSync').onclick = () => syncPending(true);
+  window.addEventListener('online', () => { actualizarBadges(); if (state.settings.autoSync) syncPending(false); });
+  window.addEventListener('offline', actualizarBadges);
+  setInterval(() => { if (state.settings.autoSync && navigator.onLine) syncPending(false); }, 5 * 60 * 1000);
+
+  // Modales
+  $$('.modal').forEach(m => {
+    m.addEventListener('click', e => { if (e.target === m || e.target.closest('.cerrar')) cerrarModal(m.id); });
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') $$('.modal').forEach(m => cerrarModal(m.id)); });
+
+  // Configuración
+  $('#btnConfig').onclick = abrirConfig;
+  $('#btnGuardarCfg').onclick = () => {
+    leerConfigForm(); saveSettings(); actualizarBadges(); refrescarHistorial();
+    cerrarModal('modalConfig'); toast('Configuración guardada');
+    if (state.settings.autoSync) syncPending(false);
+  };
+  $('#btnProbar').onclick = async () => {
+    leerConfigForm();
+    const est = $('#cfgEstado');
+    if (!state.settings.webhookUrl) { est.textContent = 'Ingrese la URL.'; est.className = 'text-sm text-red-600'; return; }
+    est.textContent = 'Probando…'; est.className = 'text-sm text-slate-500';
+    try {
+      const j = await postWebhook({ action: 'ping' });
+      est.textContent = j.ok ? `✓ Conexión correcta con "${j.planilla || 'Google Sheets'}"` : `✗ ${j.error}`;
+      est.className = 'text-sm ' + (j.ok ? 'text-emerald-600 font-semibold' : 'text-red-600');
+    } catch (e) { est.textContent = '✗ ' + e.message; est.className = 'text-sm text-red-600'; }
+  };
+  $('#btnBackup').onclick = () => {
+    const d = new Date();
+    descargarBlob(new Blob([JSON.stringify({ app: 'control-epp', version: 1, exportado: d.toISOString(), registros: state.records }, null, 1)], { type: 'application/json' }),
+      `respaldo_EPP_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.json`);
+  };
+  $('#inpImport').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      const arr = Array.isArray(data) ? data : data.registros;
+      if (!Array.isArray(arr)) throw new Error('Formato no reconocido');
+      const ids = new Set(state.records.map(r => r.id));
+      let n = 0;
+      for (const r of arr) {
+        if (!r || !r.id || !Array.isArray(r.items) || ids.has(r.id)) continue;
+        await DB.put(r); state.records.push(r); ids.add(r.id); n++;
+      }
+      refrescarTodo(); toast(`Importados ${n} registro(s) nuevos`);
+    } catch (err) { toast('No se pudo importar: ' + err.message, 'err', 5000); }
+    e.target.value = '';
+  };
+  $('#btnBorrarTodo').onclick = async () => {
+    const pend = state.records.filter(r => !r.synced).length;
+    const txt = prompt(`Se borrarán ${state.records.length} registro(s) de este dispositivo${pend ? ` (${pend} aún NO sincronizados)` : ''}.\nDescargue un respaldo o Excel antes.\n\nEscriba BORRAR para confirmar:`);
+    if (txt !== 'BORRAR') return;
+    await DB.clear(); state.records = []; refrescarTodo(); cerrarModal('modalConfig'); toast('Datos del dispositivo eliminados', 'info');
+  };
+}
+
+(async function init() {
+  loadSettings();
+  renderCatalogo();
+  initEppEventos();
+  initEventos();
+  await DB.open();
+  try { state.records = await DB.all(); } catch (e) { console.error(e); toast('Error leyendo datos locales', 'err'); }
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  $('#fResponsable').value = state.settings.responsable || '';
+  setAhora();
+  Sig.setup();
+  refrescarTodo();
+  if (state.settings.autoSync && navigator.onLine) syncPending(false);
+  // Service worker opcional (sw.js junto a este archivo) para abrir la app sin señal
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
